@@ -293,6 +293,7 @@ int redisAppendCommandArgv(redisContext *c, int argc, const char **argv, const s
 void *redisvCommand(redisContext *c, const char *format, va_list ap);
 void *redisCommand(redisContext *c, const char *format, ...);
 void *redisCommandArgv(redisContext *c, int argc, const char **argv, const size_t *argvlen);
+void *redisLongTailLatency(redisContext *c, char in_filename[], char out_filename[], int interval);
 
 #ifdef __cplusplus
 }

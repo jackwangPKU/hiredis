@@ -1106,3 +1106,101 @@ void *redisCommandArgv(redisContext *c, int argc, const char **argv, const size_
         return NULL;
     return __redisBlockForReply(c);
 }
+
+int partition(double *a, int begin, int end) {
+    double last = a[end];
+    int i = begin - 1, j;
+    for (j = begin; j < end; j++) {
+        if (a[j] <= last) {
+            double tmp = a[++i];
+            a[i] = a[j];
+            a[j] = tmp;
+        }
+    }
+    a[end] = a[++i];
+    a[i] = last;
+    return i;
+}
+
+void quickSort(double *a, int size) {
+    int *stack = (int*)malloc(size * sizeof(int));
+    int top = 0, begin = 0, end = size - 1;
+    int mid = partition(a, begin, end);
+
+    if (mid > begin + 1) {
+        stack[top++] = begin;
+        stack[top++] = mid - 1;
+    }
+
+    if (mid < end - 1) {
+        stack[top++] = mid + 1;
+        stack[top++] = end;
+    }
+
+    while (top > 0) {
+        end = stack[--top];
+        begin = stack[--top];
+        mid = partition(a, begin, end);
+
+        if (mid > begin + 1) {
+            stack[top++] = begin;
+            stack[top++] = mid - 1;
+        }
+
+        if (mid < end - 1) {
+            stack[top++] = mid + 1;
+            stack[top++] = end;
+        }
+    }
+}
+
+void *redisLongTailLatency(redisContext *c, char in_filename[], char out_filename[], int interval) {
+    FILE *in = fopen(in_filename, "r");
+    FILE *out = fopen(out_filename, "w");
+    double init, start, end, final;         // ms
+    double *latency = (double*)malloc(30000000 * sizeof(double));
+    int count = -1;
+    int index = 0;
+    struct timeval init_v, start_v, end_v;
+    char command[1000];
+
+    gettimeofday(&init_v, NULL);
+    init = init_v.tv_sec * 1000 + ((double)init_v.tv_usec) / 1000;
+    final = init + interval * 1000;
+    // printf("init: %lf, final: %lf\n", init, final);
+    while (fgets(command, 999, in) != NULL) {
+        count++;
+        gettimeofday(&start_v, NULL);
+        start = start_v.tv_sec * 1000 + ((double)start_v.tv_usec) / 1000;
+        redisCommand(c, command);
+        gettimeofday(&end_v, NULL);
+        end = end_v.tv_sec * 1000 + ((double)end_v.tv_usec) / 1000;
+        if (count % 100 == 0)
+            latency[index++] = end - start;
+
+        // if (index >= 30000000) {
+        //     printf("array size is too large!\n");
+        //     exit(1);
+        // }
+
+        if (end >= final) {
+            quickSort(latency, index);
+
+            // printf("index: %d\n", index);
+            index *= 0.99;
+            fprintf(out, "%lf\n", latency[index]);
+            // fflush(out); 
+
+            gettimeofday(&init_v, NULL);
+            init = init_v.tv_sec * 1000 + ((double)init_v.tv_usec) / 1000;
+            final = init + interval * 1000;
+            // printf("start: %lf, init: %lf, final: %lf\n", start, init, final);
+            index = 0;
+            count = -1;
+        }
+    }
+
+    free(latency);
+    fclose(out);
+    fclose(in);
+}
